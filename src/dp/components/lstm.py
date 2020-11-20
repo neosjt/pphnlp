@@ -53,7 +53,7 @@ class LSTM(nn.Module):
                 nn.init.zeros_(i)
 
     """
-        输入的x是一个列表[第一个位置的输入向量，第二个位置的输入向量，...]
+        输入的x是一个列表[所有第一个位置的输入向量，所有第二个位置的输入向量，...]
         batch_sie也是一个列表[第一个位置的有效个数，第二位置的有效个数,...]
         reverse代表句子反过来处理，用于bilstm的反向
     """
@@ -89,6 +89,7 @@ class LSTM(nn.Module):
         传入的x为packedsequence:
         data的维度为[S*B的所有有效个数，H嵌入向量维度]
         batch_size的维度为[S]，其实就是输入数据的逐列有效长度
+        输出最后还是打包成packedsequence
     """
     def forward(self, x, hx=None):
         x, batch_sizes = x.data,x.batch_sizes

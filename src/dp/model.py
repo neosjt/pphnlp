@@ -1,123 +1,106 @@
+"""
+    sjt
+    2020.11.16
+    主模型文件，分别以bilstm_mlp_biaffine和
+                    bert_bilstm_mlp_biaffine为例
+"""
+
 import torch
 import torch.nn as nn
-from torchtext.vocab import Vectors
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-
-from .config import DEFAULT_CONFIG,DEVICE
 from .components.dropout import IndependentDropout, SharedDropout
 from .components import LSTM, MLP, Biaffine
 
 
-class Config(object):
-    def __init__(self, **kwargs):
-        super(Config, self).__init__()
-        for name, value in DEFAULT_CONFIG.items():
-            setattr(self, name, value)
-
-        self.pos_num = len(self.pos_vocab)
-        self.ref_num = len(self.ref_vocab)
-        self.vocabulary_size = len(self.word_vocab)
-        for name, value in kwargs.items():
-            setattr(self, name, value)
-
-
+#模型1：原生的bilstm_mlp_biaffine
 class BiaffineParser(nn.Module):
     def __init__(self, args):
-        super(BiaffineParser, self).__init__(args)
+        super(BiaffineParser, self).__init__()
         self.args = args
         self.hidden_dim = args.lstm_hidden
-        # self.tag_num = args.tag_num
         self.batch_size = args.batch_size
         self.bidirectional = True
-        # self.num_layers = args.num_layers
         self.lstm_layters = args.lstm_layers
-        self.pad_index = args.pad_index
         self.dropout = args.dropout
         self.save_path = args.save_path
 
-        vocabulary_size = args.vocabulary_size
+        vocabulary_size = args.word_num
         word_dim = args.word_dim
         pos_num = args.pos_num
         pos_dim = args.pos_dim
 
-        # the embedding layer
-        self.word_embedding = nn.Embedding(vocabulary_size, word_dim).to(DEVICE)
-        # vectors = Vectors(args.vector_path).vectors
-        # self.pretrained_embedding = nn.Embedding.from_pretrained(vectors).to(DEVICE)
-        self.pos_embedding = nn.Embedding(pos_num, pos_dim).to(DEVICE)
-        self.embed_dropout = IndependentDropout(p=args.embed_dropout).to(DEVICE)
+        # embedding层
+        self.word_embedding = nn.Embedding(vocabulary_size, word_dim)
+        self.pos_embedding = nn.Embedding(pos_num, pos_dim)
+        self.embed_dropout = IndependentDropout(p=args.embed_dropout)
 
-        # if args.static:
-        #     logger.info('logging word vectors from {}'.format(args.vector_path))
-        #     vectors = Vectors(args.vector_path).vectors
-        #     self.word_embedding = nn.Embedding.from_pretrained(vectors, freeze=not args.non_static).to(DEVICE)
 
-        # the word-lstm layer
+
+
+        # bilstm layer
         self.lstm = LSTM(word_dim + pos_dim, self.hidden_dim, bidirectional=self.bidirectional,
-                            num_layers=self.lstm_layters, dropout=args.lstm_dropout).to(DEVICE)
-        self.lstm_dropout = SharedDropout(p=args.lstm_dropout).to(DEVICE)
+                            num_layers=self.lstm_layters, dropout=args.lstm_dropout)
+        self.lstm_dropout = SharedDropout(p=args.lstm_dropout)
 
-        # the MLP layers
-        self.mlp_arc_h = MLP(n_in=args.lstm_hidden*2, n_hidden=args.mlp_arc, dropout=args.mlp_dropout).to(DEVICE)
-        self.mlp_arc_d = MLP(n_in=args.lstm_hidden*2, n_hidden=args.mlp_arc, dropout=args.mlp_dropout).to(DEVICE)
-        self.mlp_rel_h = MLP(n_in=args.lstm_hidden*2, n_hidden=args.mlp_rel, dropout=args.mlp_dropout).to(DEVICE)
-        self.mlp_rel_d = MLP(n_in=args.lstm_hidden*2, n_hidden=args.mlp_rel, dropout=args.mlp_dropout).to(DEVICE)
+        # MLP层
+        self.mlp_arc_h = MLP(n_in=args.lstm_hidden*2, n_hidden=args.mlp_arc, dropout=args.mlp_dropout)
+        self.mlp_arc_d = MLP(n_in=args.lstm_hidden*2, n_hidden=args.mlp_arc, dropout=args.mlp_dropout)
+        self.mlp_rel_h = MLP(n_in=args.lstm_hidden*2, n_hidden=args.mlp_rel, dropout=args.mlp_dropout)
+        self.mlp_rel_d = MLP(n_in=args.lstm_hidden*2, n_hidden=args.mlp_rel, dropout=args.mlp_dropout)
 
-        # the Biaffine layers
-        self.arc_attn = Biaffine(n_in=args.mlp_arc, bias_x=True, bias_y=False).to(DEVICE)
-        self.rel_attn = Biaffine(n_in=args.mlp_rel, n_out=args.ref_num, bias_x=True, bias_y=True).to(DEVICE)
+        # Biaffine层
+        self.arc_attn = Biaffine(n_in=args.mlp_arc, bias_x=True, bias_y=False)
+        self.rel_attn = Biaffine(n_in=args.mlp_rel, n_out=args.rel_num, bias_x=True, bias_y=True)
 
-        self.reset_parameters()
+        #self.reset_parameters()
 
-    def reset_parameters(self):
-        nn.init.zeros_(self.word_embedding.weight)
-
-    def init_hidden(self, batch_size=None):
-        if batch_size is None:
-            batch_size = self.batch_size
-
-        h0 = torch.zeros(self.num_layers * 2, batch_size, self.hidden_dim // 2).to(DEVICE)
-        c0 = torch.zeros(self.num_layers * 2, batch_size, self.hidden_dim // 2).to(DEVICE)
-
-        return h0, c0
+    # def reset_parameters(self):
+    #     nn.init.zeros_(self.word_embedding.weight)
+    #
+    # def init_hidden(self, batch_size=None):
+    #     if batch_size is None:
+    #         batch_size = self.batch_size
+    #
+    #     h0 = torch.zeros(self.num_layers * 2, batch_size, self.hidden_dim // 2).to(DEVICE)
+    #     c0 = torch.zeros(self.num_layers * 2, batch_size, self.hidden_dim // 2).to(DEVICE)
+    #
+    #     return h0, c0
 
     def forward(self, words, tags):
-        # get the mask and lengths of given batch
-        mask = words.ne(self.pad_index)
+        # 得到每batch数据的mask和lens
+        mask = words.ne(self.args.pad_index)
         lens = mask.sum(dim=1)
-        # get outputs from embedding layers
-        # embed = self.pretrained_embedding(words)
-        # #sjt注释： 感觉这里是为了处理pretrained的词典数>word_embed词典数，将不在 word_embed的词，取0有embeding
-        # embed += self.word_embedding(words.masked_fill_(words.ge(self.word_embedding.num_embeddings), 0))
-        embed=self.word_embedding(words)
-        tag_embed = self.pos_embedding(tags)
-        embed, tag_embed = self.embed_dropout(embed, tag_embed)
-        # concatenate the word and tag representations
-        x = torch.cat((embed, tag_embed), dim=-1)
 
+        #1.embedding处理流程
+        word_emb=self.word_embedding(words)
+        pos_emb = self.pos_embedding(tags)
+        word_emb, pos_emb = self.embed_dropout(word_emb, pos_emb)
+        x = torch.cat((word_emb, pos_emb), dim=-1)
+
+        #2.bilstm处理流程
+        #1).按句长降序排列
         sorted_lens, indices = torch.sort(lens, descending=True)
+        #2).还原句子排列
         inverse_indices = indices.argsort()
-        # print(x[indices])
-        # print(sorted_lens)
         x = pack_padded_sequence(x[indices], sorted_lens, True)
-        # print(x)
         x = self.lstm(x)
         x, _ = pad_packed_sequence(x, True)
         x = self.lstm_dropout(x)[inverse_indices]
 
-        # apply MLPs to the LSTM output states
+
+        # 3.MLP处理
         arc_h = self.mlp_arc_h(x)
         arc_d = self.mlp_arc_d(x)
         rel_h = self.mlp_rel_h(x)
         rel_d = self.mlp_rel_d(x)
 
-        # get arc and rel scores from the bilinear attention
+        # 4.Biaffine处理流程
         # [batch_size, seq_len, seq_len]
         s_arc = self.arc_attn(arc_d, arc_h)
         # [batch_size, seq_len, seq_len, n_rels]
         s_rel = self.rel_attn(rel_d, rel_h).permute(0, 2, 3, 1)
         # set the scores that exceed the length of each sentence to -inf
-        s_arc.masked_fill_((mask.ne(1)).unsqueeze(1), int(-10000))
+        s_arc.masked_fill_((mask.ne(1)).unsqueeze(1), float('-inf'))
 
 
         return s_arc, s_rel

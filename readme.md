@@ -13,3 +13,7 @@
    6.语义依存分析SDP  
 ##  知识图谱
 ##  对话系统
+# 部署
+    直接运行项目主目录下的run.py脚本，自动启动flask服务，通过url的方式调用后台服务
+    例如：http://localhost:5000/dp_predict?words="爸爸爱你"
+    返回：{"result":{"arcs":[0,2,0],"rels":["<ROOT>","\u6838\u5fc3\u6210\u5206","\u6838\u5fc3\u6210\u5206"]},"state":"OK"}

@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 
 
+#用于bilstm中对输入进行dropout
 class SharedDropout(nn.Module):
 
     def __init__(self, p=0.5, batch_first=True):
@@ -42,7 +43,7 @@ class SharedDropout(nn.Module):
 
         return mask
 
-
+#用于embeddin中不同成份的dropout
 class IndependentDropout(nn.Module):
 
     def __init__(self, p=0.5):
