@@ -40,7 +40,7 @@ class BERT_BiLSTM_CRF(nn.Module):
         self.crf = CRF(num_labels)
 
 
-    def loss(self,input_ids,bert_mask,token_type_ids,sent_lens,crf_mask,gt_tags):
+    def loss(self,input_ids,bert_mask,token_type_ids,sorted_lens,crf_mask,gt_tags):
         """
         :param input_ids:传入的是pad过的等长的batch_sentence
         :return:
@@ -52,7 +52,7 @@ class BERT_BiLSTM_CRF(nn.Module):
         print(sequence_output.shape)
 
         #2.bilstm
-        sequence_output = pack_padded_sequence(sequence_output, sent_lens,batch_first=True)
+        sequence_output = pack_padded_sequence(sequence_output, sorted_lens,batch_first=True)
         sequence_output, _ = self.bilstm(sequence_output)
         sequence_output, _ = pad_packed_sequence(sequence_output,batch_first=True)
         print(sequence_output.shape)

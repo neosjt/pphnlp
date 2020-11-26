@@ -5,10 +5,11 @@
 """
 
 import codecs
-from src.pos.config import TRAINSET_PATH,LABELSET_PATH,POSDICT_PATH,bert_tokenizer
+from src.pos.config import TRAINSET_PATH,LABELSET_PATH,POSDICT_PATH,bert_tokenizer,CLS_INDEX,SEP_INDEX,PAD_INDEX,DEVICE,DEFAULT_CONFIG
 from collections  import  defaultdict
 import json
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset,DataLoader
+import torch
 
 
 #将PFR人民日报标注语料库.txt------>pos_dict.json，
@@ -64,6 +65,8 @@ def getPOSVocab(path):
 #制作data_loader
 class MyDataset(Dataset):
     def __init__(self,trainset_path):
+        self.sentence_matrix=[]
+        self.tag_matrix=[]
         with open(trainset_path, 'r', encoding='utf-8') as fr:
             for line in fr:
                 line_tags=[]
@@ -86,35 +89,53 @@ class MyDataset(Dataset):
                             line_tags+=["B-"+pos]+["I-"+pos]*(word_len-1)
                         else:
                             line_tags+=["S-"+pos]
-                        line_words+
-                    assert(len(line_words_str)==len(line_tags))
-                    print(line_words_str)
-                    print(line_tags)
-
+                        line_words.extend(word_ids)
+                    assert(len(line_words)==len(line_tags))
+                    line_tags=[pos2id[pos] for pos in line_tags]
+                    self.sentence_matrix.append(line_words)
+                    self.tag_matrix.append(line_tags)
+        self.len=len(self.sentence_matrix)
 
     def __getitem__(self, index):
-        return self.wordmatrix[index],\
-               self.posmatrix[index],\
-               self.headmatrix[index],\
-               self.relmatrix[index]
+        return self.sentence_matrix[index],\
+               self.tag_matrix[index],\
+
 
     def __len__(self):
         return self.len
 
-    # def my_collate(batch_data):
-    #     batch_words,batch_pos,batch_heads,batch_rels=zip(*batch_data)
-    #     max_len = max(list(map(len,batch_words)))
-    #     batch_words=[  words+[WORD_PAD_INDEX]*(max_len-len(words))  for words in batch_words]
-    #     batch_pos=[  pos+[POS_PAD_INDEX]*(max_len-len(pos))  for pos in batch_pos]
-    #     batch_heads = [ heads + [HEAD_PAD_INDEX] * (max_len - len(heads)) for heads in batch_heads]
-    #     batch_rels=  [ rels + [REL_PAD_INDEX] * (max_len - len(rels)) for rels in batch_rels]
-    #     return torch.tensor(batch_words,dtype=torch.long).to(DEVICE),\
-    #            torch.tensor(batch_pos,dtype=torch.long).to(DEVICE), \
-    #            torch.tensor(batch_heads, dtype=torch.long).to(DEVICE),\
-    #            torch.tensor(batch_rels,dtype=torch.long).to(DEVICE),\
+def my_collate(batch_data):
+    batch_sentences,batch_tags=zip(*batch_data)
+    sent_lens=list(map(len,batch_sentences))
+    max_len = max(sent_lens)
+    input_ids=[ [CLS_INDEX]+ words+[SEP_INDEX] +[PAD_INDEX]*(max_len-len(words)) for words in batch_sentences]
+    gt_tags=[  pos+[-1]*(max_len-len(pos))  for pos in batch_tags]
+    bert_mask=[]
+    crf_mask=[]
+    for each_len in sent_lens:
+        line_bert_mask=[1]*(each_len+2)+[0]*(max_len-each_len)
+        bert_mask.append(line_bert_mask)
+        line_crf_mask=[1]*(each_len)+[0]*(max_len-each_len)
+        crf_mask.append(line_crf_mask)
+
+    input_ids=torch.tensor(input_ids, dtype=torch.long).to(DEVICE)
+    gt_tags=torch.tensor(gt_tags, dtype=torch.long).to(DEVICE)
+    bert_mask=torch.tensor(bert_mask, dtype=torch.long).to(DEVICE)
+    crf_mask=torch.tensor(crf_mask, dtype=torch.long).to(DEVICE)
+    token_type_ids=torch.zeros(input_ids.shape,dtype=torch.long).to(DEVICE)
+    sent_lens=torch.tensor(sent_lens,dtype=torch.long)
+    sorted_lens, indices = torch.sort(sent_lens, descending=True)
+    sorted_lens=sorted_lens.to(DEVICE)
+    return input_ids,bert_mask,token_type_ids,sorted_lens,crf_mask,gt_tags
 
 
-
+def getDataLoader(path):
+    mydataset=MyDataset(path)
+    mydataloader = DataLoader(dataset=mydataset,
+                              batch_size=DEFAULT_CONFIG['batch_size'],
+                              shuffle=True,
+                              collate_fn=my_collate)
+    return mydataloader
 
 
 
@@ -123,6 +144,7 @@ class MyDataset(Dataset):
 #预处理数据
 pos_dict=loadPosDict(POSDICT_PATH)
 pos2id,id2pos=genPOSIDDict(pos_dict)
+train_loader=getDataLoader(TRAINSET_PATH)
 
 
 
@@ -141,4 +163,13 @@ if __name__=='__main__':
     # print(pos_dict)
     #generatePosDict(LABELSET_PATH,POSDICT_PATH)
     # print(pos2id)
-    dataset=MyDataset(TRAINSET_PATH)
+    #dataset=MyDataset(TRAINSET_PATH)
+
+    for ii, (input_ids,bert_mask,token_type_ids,sorted_lens,crf_mask,gt_tags) in enumerate(train_loader):
+        print("#####################one_batch################")
+        print(input_ids.shape)
+        print(bert_mask.shape)
+        print(token_type_ids.shape)
+        print(sorted_lens.shape)
+        print(crf_mask.shape)
+        print(gt_tags.shape)
