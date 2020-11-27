@@ -108,12 +108,12 @@ def my_collate(batch_data):
     batch_sentences,batch_tags=zip(*batch_data)
     sent_lens=list(map(len,batch_sentences))
     max_len = max(sent_lens)
-    input_ids=[ [CLS_INDEX]+ words+[SEP_INDEX] +[PAD_INDEX]*(max_len-len(words)) for words in batch_sentences]
+    input_ids=[ [CLS_INDEX]+ words +[PAD_INDEX]*(max_len-len(words)) for words in batch_sentences]
     gt_tags=[  pos+[-1]*(max_len-len(pos))  for pos in batch_tags]
     bert_mask=[]
     crf_mask=[]
     for each_len in sent_lens:
-        line_bert_mask=[1]*(each_len+2)+[0]*(max_len-each_len)
+        line_bert_mask=[1]*(each_len+1)+[0]*(max_len-each_len)
         bert_mask.append(line_bert_mask)
         line_crf_mask=[1]*(each_len)+[0]*(max_len-each_len)
         crf_mask.append(line_crf_mask)
@@ -165,11 +165,19 @@ if __name__=='__main__':
     # print(pos2id)
     #dataset=MyDataset(TRAINSET_PATH)
 
-    for ii, (input_ids,bert_mask,token_type_ids,sorted_lens,crf_mask,gt_tags) in enumerate(train_loader):
-        print("#####################one_batch################")
-        print(input_ids.shape)
-        print(bert_mask.shape)
-        print(token_type_ids.shape)
-        print(sorted_lens.shape)
-        print(crf_mask.shape)
-        print(gt_tags.shape)
+    # for ii, (input_ids,bert_mask,token_type_ids,sorted_lens,crf_mask,gt_tags) in enumerate(train_loader):
+    #     print("#####################one_batch################")
+    #     print(input_ids.shape)
+    #     print(input_ids)
+    #     print(bert_mask.shape)
+    #     print(bert_mask)
+    #     print(token_type_ids.shape)
+    #     print(token_type_ids)
+    #     print(sorted_lens.shape)
+    #     print(sorted_lens)
+    #     print(crf_mask.shape)
+    #     print(crf_mask)
+    #     print(gt_tags.shape)
+    #     print(gt_tags)
+    print(len(pos2id))
+    print(pos2id)
