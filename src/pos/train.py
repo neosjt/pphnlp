@@ -22,6 +22,7 @@ from src.pos.module import POSModule
 
 if __name__=='__main__':
     module=POSModule()
+    module.load()
     # module.train()
-    res=module.predict(['爸爸爱你'])
+    res=module.predict(['爸爸爱你','我草你妈你好啊!'])
     print(res)

@@ -66,7 +66,7 @@ class POSModule(object):
 
     def load(self):
         if self._model is None:
-            logger.info('加载模型')
+            #logger.info('加载模型')
             self._model= BERT_BiLSTM_CRF()
             self._model=torch.load(MODEL_PATH)
             self._model.to(DEVICE)
@@ -90,23 +90,38 @@ class POSModule(object):
             line_crf_mask = [1] * (each_len) + [0] * (max_len - each_len)
             crf_mask.append(line_crf_mask)
 
-        input_ids = torch.tensor(input_ids, dtype=torch.long).to(DEVICE)
-        bert_mask = torch.tensor(bert_mask, dtype=torch.long).to(DEVICE)
-        crf_mask = torch.tensor(crf_mask, dtype=torch.long).to(DEVICE)
-        token_type_ids = torch.zeros(input_ids.shape, dtype=torch.long).to(DEVICE)
+        #1).按句长降序排列
         sent_lens = torch.tensor(sent_lens, dtype=torch.long)
         sorted_lens, indices = torch.sort(sent_lens, descending=True)
-        sorted_lens = sorted_lens.to(DEVICE)
-        return  input_ids,bert_mask,token_type_ids,sorted_lens,crf_mask
+        #2).还原句子排列
+        inverse_indices = indices.argsort()
+
+
+        input_ids = torch.tensor(input_ids, dtype=torch.long)[indices]
+        bert_mask = torch.tensor(bert_mask, dtype=torch.long)[indices]
+        #由于在预测时，我在bilstm中已经将顺序还原了，这里就不需要了排序了
+        crf_mask = torch.tensor(crf_mask, dtype=torch.long)
+        token_type_ids = torch.zeros(input_ids.shape, dtype=torch.long)[indices]
+
+
+        return  input_ids.to(DEVICE),\
+                bert_mask.to(DEVICE),\
+                token_type_ids.to(DEVICE),\
+                sorted_lens.to(DEVICE),\
+                crf_mask.to(DEVICE),\
+                inverse_indices.to(DEVICE)
 
     def predict(self,sentences):
-        self.load()
         self._model.eval()
-        input_ids, bert_mask, token_type_ids, sorted_lens, crf_mask=self._prepare_data(sentences)
+        input_ids, bert_mask, token_type_ids, sorted_lens, crf_mask,inverse_indices=self._prepare_data(sentences)
 
-        result=self._model.predict(input_ids, bert_mask, token_type_ids, sorted_lens, crf_mask)
 
-        return result
+        result=self._model.predict(input_ids, bert_mask, token_type_ids, sorted_lens, crf_mask,inverse_indices)
+        res_pos=[]
+        for line_res in result:
+            res_pos.append([  id2pos[id] for id in line_res])
+
+        return res_pos
 
 
 

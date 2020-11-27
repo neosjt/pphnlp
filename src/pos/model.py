@@ -68,7 +68,7 @@ class BERT_BiLSTM_CRF(nn.Module):
 
         return loss
 
-    def predict(self,input_ids,bert_mask,token_type_ids,sorted_lens,crf_mask):
+    def predict(self,input_ids,bert_mask,token_type_ids,sorted_lens,crf_mask,unsort_indices):
         # 1.bert处理
         outputs = self.bert(input_ids, token_type_ids=token_type_ids, attention_mask=bert_mask)
         sequence_output = outputs[0]
@@ -79,6 +79,8 @@ class BERT_BiLSTM_CRF(nn.Module):
         sequence_output = pack_padded_sequence(sequence_output, sorted_lens, batch_first=True)
         sequence_output, _ = self.bilstm(sequence_output)
         sequence_output, _ = pad_packed_sequence(sequence_output, batch_first=True)
+        sequence_output=sequence_output[unsort_indices]
+
         # print(sequence_output.shape)
 
         # 3.hidden-->tags

@@ -5,10 +5,11 @@
     需要从训练集中提取word，pos,rel词典
     并制作训练集，测试集
 """
-from .config import ROOT,UKN,PAD,DEFAULT_CONFIG,DEVICE,WORD_PAD_INDEX,POS_PAD_INDEX,HEAD_PAD_INDEX,REL_PAD_INDEX
+from src.dp.config import ROOT,UKN,PAD,DEFAULT_CONFIG,DEVICE,WORD_PAD_INDEX,POS_PAD_INDEX,HEAD_PAD_INDEX,REL_PAD_INDEX,DATA_PATH
 from torch.utils.data import Dataset
-from ..utils.log import logger
+from src.utils.log import logger
 import torch
+from src.pos.datahelper import pos_dict
 
 class DataHelper(object):
     def __init__(self,data_path):
@@ -130,6 +131,19 @@ def my_collate(batch_data):
            torch.tensor(batch_pos,dtype=torch.long).to(DEVICE), \
            torch.tensor(batch_heads, dtype=torch.long).to(DEVICE),\
            torch.tensor(batch_rels,dtype=torch.long).to(DEVICE),\
+
+
+
+if __name__=='__main__':
+    dh=DataHelper(DATA_PATH)
+    posvocab1=set(dh.posvocab)
+    posvocab2=set(pos_dict.keys())
+    intersect=posvocab1.intersection(posvocab2)
+    print(intersect)
+    print(len(intersect))
+    diff= posvocab1.difference(posvocab2)
+    print(diff)
+    print(len(diff))
 
 
 

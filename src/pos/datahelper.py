@@ -1,11 +1,13 @@
 """
     pph
     2020.11.26
-    所有的数据预处理工作都在这里完成
+    所有的数据预处理工作都在这里完成,脏活
+    不喜欢使用torchtext之类的工具，隐藏了所有处理细节，
+    还是使用Dataset这一套玩法
 """
 
 import codecs
-from src.pos.config import TRAINSET_PATH,LABELSET_PATH,POSDICT_PATH,bert_tokenizer,CLS_INDEX,SEP_INDEX,PAD_INDEX,DEVICE,DEFAULT_CONFIG
+from .config import TRAINSET_PATH,LABELSET_PATH,POSDICT_PATH,bert_tokenizer,CLS_INDEX,SEP_INDEX,PAD_INDEX,DEVICE,DEFAULT_CONFIG
 from collections  import  defaultdict
 import json
 from torch.utils.data import Dataset,DataLoader
@@ -104,6 +106,7 @@ class MyDataset(Dataset):
     def __len__(self):
         return self.len
 
+#collate_fn是对data_loader取的每个 batch数据单独进行处理
 def my_collate(batch_data):
     batch_sentences,batch_tags=zip(*batch_data)
     sent_lens=list(map(len,batch_sentences))
@@ -118,15 +121,26 @@ def my_collate(batch_data):
         line_crf_mask=[1]*(each_len)+[0]*(max_len-each_len)
         crf_mask.append(line_crf_mask)
 
-    input_ids=torch.tensor(input_ids, dtype=torch.long).to(DEVICE)
-    gt_tags=torch.tensor(gt_tags, dtype=torch.long).to(DEVICE)
-    bert_mask=torch.tensor(bert_mask, dtype=torch.long).to(DEVICE)
-    crf_mask=torch.tensor(crf_mask, dtype=torch.long).to(DEVICE)
-    token_type_ids=torch.zeros(input_ids.shape,dtype=torch.long).to(DEVICE)
+    #按照惯例，我们需要将所有输入按降序排列
     sent_lens=torch.tensor(sent_lens,dtype=torch.long)
     sorted_lens, indices = torch.sort(sent_lens, descending=True)
-    sorted_lens=sorted_lens.to(DEVICE)
-    return input_ids,bert_mask,token_type_ids,sorted_lens,crf_mask,gt_tags
+    #及其还原
+    inverse_indices = indices.argsort()
+
+    #在CPU环境中完成所有数据的组装，返加GPU数据
+    input_ids=torch.tensor(input_ids, dtype=torch.long)[indices]
+    gt_tags=torch.tensor(gt_tags, dtype=torch.long)[indices]
+    bert_mask=torch.tensor(bert_mask, dtype=torch.long)[indices]
+    crf_mask=torch.tensor(crf_mask, dtype=torch.long)[indices]
+    token_type_ids=torch.zeros(input_ids.shape,dtype=torch.long)[indices]
+
+    #在训练时，对不对输出句子顺序进行还原都行，这里就不处理了，预测时需要
+    return input_ids.to(DEVICE),\
+           bert_mask.to,\
+           token_type_ids.to(DEVICE),\
+           sorted_lens.to(DEVICE),\
+           crf_mask.to(DEVICE),\
+           gt_tags.to(DEVICE)
 
 
 def getDataLoader(path):
@@ -149,7 +163,7 @@ train_loader=getDataLoader(TRAINSET_PATH)
 
 
 
-if __name__=='__main__':
+# if __name__=='__main__':
     # pos_vocab2=getPOSVocab2(LABELSET_PATH)
     # pos_vocab=getPOSVocab(TRAINSET_PATH)
     # pos_vocab2=set(pos_dict.keys())
@@ -179,5 +193,5 @@ if __name__=='__main__':
     #     print(crf_mask)
     #     print(gt_tags.shape)
     #     print(gt_tags)
-    print(len(pos2id))
-    print(pos2id)
+    # print(len(pos2id))
+    # print(pos2id)

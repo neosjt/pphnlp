@@ -72,13 +72,13 @@ CLS_INDEX=101
 SEP_INDEX=102
 MASK_INDEX=103
 
-if __name__=='__main__':
-    res=bert_tokenizer.encode("我草")
-    ids=bert_tokenizer.convert_tokens_to_ids(res)
-    print(res)
-    print(type(res))
-    print(ids)
-    print(type(ids))
+# if __name__=='__main__':
+#     res=bert_tokenizer.encode("我草")
+#     ids=bert_tokenizer.convert_tokens_to_ids(res)
+#     print(res)
+#     print(type(res))
+#     print(ids)
+#     print(type(ids))
 
 
 
